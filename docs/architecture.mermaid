@@ -1,0 +1,93 @@
+flowchart TD
+    %% Custom Styling
+    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef ingest fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef extract fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
+    classDef engine fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef persist fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f;
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#b71c1c;
+
+    %% 1. Client Layer
+    subgraph ClientLayer ["Client & Interface Layer"]
+        WebUI["Web Dashboard / Frontend<br/>(Jinja2 / Tailwind CSS)"]:::client
+        APIClient["REST API Client / cURL / Swagger Docs"]:::client
+    end
+
+    %% 2. Ingestion & Pre-validation Layer
+    subgraph IngestionLayer ["Ingestion & Input Control Layer"]
+        APIRoute["FastAPI Ingestion Route<br/>(POST /api/v1/documents/process)"]:::ingest
+        ValService{"Input Validation Service<br/>(File Integrity & Constraints)"}:::ingest
+        Rejection["Reject File & Return Error<br/>(HTTP 400 / UNSUPPORTED_FILE)"]:::error
+    end
+
+    %% 3. OCR & Parsing Pipeline
+    subgraph OCRPipeline ["Document Processing & Text Extraction"]
+        FormatCheck{"Native or Scanned PDF / Image?"}:::extract
+        PyMuPDF["PyMuPDF (fitz)<br/>Direct Vector Text & Meta Extraction"]:::extract
+        EasyOCR["EasyOCR / Tesseract Engine<br/>Image Parsing & Bounding Boxes"]:::extract
+        ExtractedText["Structured Text Buffer + Page Mapping"]:::extract
+    end
+
+    %% 4. AI Structured Extraction Engine
+    subgraph AIEngine ["LLM Structured Extraction Engine"]
+        PromptBuilder["Prompt Builder<br/>(Grounding & Evidence Framing)"]:::engine
+        LLM["Multimodal LLM Provider<br/>(Gemini 1.5 Flash / GPT-4o-mini)"]:::engine
+        PydanticSchema["Pydantic Strict JSON Schema<br/>(Invoice / Balance Sheet / P&L / Cash Flow)"]:::engine
+        RawStructuredJSON["Structured Extraction JSON<br/>(Values, Evidence, Source Text)"]:::engine
+    end
+
+    %% 5. Financial Validation & Logic Engine
+    subgraph FinancialEngine ["Financial Logic & Validation Engine"]
+        DocTypeRouter{"Document Type Routing"}:::engine
+        InvoiceCheck["Invoice Check:<br/>Qty × Price ≈ Total | Subtotal + Tax ≈ Grand Total"]:::engine
+        BSCheck["Balance Sheet Check:<br/>Total Assets ≈ Total Liabilities + Equity"]:::engine
+        PLCheck["P&L Check:<br/>Revenue - COGS ≈ Gross Profit | Income - Exp ≈ Net Profit"]:::engine
+        CFCheck["Cash Flow Check:<br/>Operating + Investing + Financing ≈ Net CF"]:::engine
+        AuditEvaluator["Audit & Variance Evaluator<br/>(PASS / FAIL / NOT_APPLICABLE)"]:::engine
+    end
+
+    %% 6. Persistence & Presentation Layer
+    subgraph StorageLayer ["Persistence & Output Layer"]
+        ORM["SQLAlchemy 2.0 ORM"]:::persist
+        Database[("SQLite / PostgreSQL<br/>(Persisted Documents & Audits)")]:::persist
+        DashboardAPI["REST API / Dashboard Router<br/>(GET /api/v1/documents)"]:::persist
+        FinalResponse["Structured JSON Output + UI Card Render"]:::client
+    end
+
+    %% Connection Flow
+    WebUI -->|Upload Document + Meta| APIRoute
+    APIClient -->|Multipart Request| APIRoute
+
+    APIRoute --> ValService
+    ValService -->|Invalid File / Page Count > 3| Rejection
+    ValService -->|PASS: PDF / JPG / PNG <= 3 Pages| FormatCheck
+
+    FormatCheck -->|Native PDF| PyMuPDF
+    FormatCheck -->|Scanned PDF / JPG / PNG| EasyOCR
+
+    PyMuPDF --> ExtractedText
+    EasyOCR --> ExtractedText
+
+    ExtractedText --> PromptBuilder
+    PromptBuilder --> LLM
+    LLM --> PydanticSchema
+    PydanticSchema --> RawStructuredJSON
+
+    RawStructuredJSON --> DocTypeRouter
+    DocTypeRouter -->|Invoice| InvoiceCheck
+    DocTypeRouter -->|Balance Sheet| BSCheck
+    DocTypeRouter -->|Profit & Loss| PLCheck
+    DocTypeRouter -->|Cash Flow| CFCheck
+
+    InvoiceCheck --> AuditEvaluator
+    BSCheck --> AuditEvaluator
+    PLCheck --> AuditEvaluator
+    CFCheck --> AuditEvaluator
+
+    AuditEvaluator --> ORM
+    ORM --> Database
+
+    Database --> DashboardAPI
+    DashboardAPI --> FinalResponse
+    FinalResponse --> WebUI
+    FinalResponse --> APIClient
